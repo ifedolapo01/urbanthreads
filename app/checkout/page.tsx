@@ -350,13 +350,13 @@ function CustomerInformation({ deliveryOption, isPickupAvailable, selectedState,
         <FormInput
           label="First Name *"
           value={formData.firstName}
-          onChange={(e) => setFormData({...formData, firstName: e.target.value})}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, firstName: e.target.value})}
           placeholder="First Name"
         />
         <FormInput
           label="Last Name *"
           value={formData.lastName}
-          onChange={(e) => setFormData({...formData, lastName: e.target.value})}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, lastName: e.target.value})}
           placeholder="Last Name"
         />
       </div>
@@ -366,14 +366,14 @@ function CustomerInformation({ deliveryOption, isPickupAvailable, selectedState,
           type="email"
           label="Email *"
           value={formData.email}
-          onChange={(e) => setFormData({...formData, email: e.target.value})}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, email: e.target.value})}
           placeholder="your@email.com"
         />
         <FormInput
           type="tel"
           label="Phone Number *"
           value={formData.phone}
-          onChange={(e) => setFormData({...formData, phone: e.target.value})}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, phone: e.target.value})}
           placeholder="Phone Number"
         />
       </div>
@@ -394,7 +394,7 @@ function CustomerInformation({ deliveryOption, isPickupAvailable, selectedState,
         </label>
         <textarea
           value={formData.note}
-          onChange={(e) => setFormData({...formData, note: e.target.value})}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, note: e.target.value})}
           placeholder="Any special instructions or notes for your order..."
           className="w-full border border-gray-300 text-black rounded-lg px-3 sm:px-4 py-2 sm:py-3 h-24 sm:h-32 text-sm"
           rows={3}
@@ -429,7 +429,7 @@ function AddressFields({ selectedState, address, city, setAddress, setCity }: an
         <FormInput
           label={selectedState === 'Abuja' ? 'Delivery Address *' : 'Park Drop-off Address *'}
           value={address}
-          onChange={(e) => setAddress(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setAddress(e.target.value)}
           placeholder={selectedState === 'Abuja' 
             ? "House number, Street, Area" 
             : "Which park should we deliver to?"
@@ -438,7 +438,7 @@ function AddressFields({ selectedState, address, city, setAddress, setCity }: an
         <FormInput
           label="City/Town *"
           value={city}
-          onChange={(e) => setCity(e.target.value)}
+          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setCity(e.target.value)}
           placeholder="City or town in your state"
         />
       </div>
