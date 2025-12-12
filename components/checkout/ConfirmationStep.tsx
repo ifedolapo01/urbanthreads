@@ -126,7 +126,13 @@ function NextSteps({ deliveryOption, isPickupAvailable, selectedState, formData,
   );
 }
 
-function StepItem({ number, color, children }: any) {
+type StepColor = 'blue' | 'yellow' | 'green';
+
+function StepItem({ number, color, children }: { 
+  number: number; 
+  color: StepColor; 
+  children: React.ReactNode 
+}) {
   const colorClasses = {
     blue: 'bg-blue-100 text-blue-600',
     yellow: 'bg-yellow-100 text-yellow-600',
