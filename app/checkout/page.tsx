@@ -394,7 +394,7 @@ function CustomerInformation({ deliveryOption, isPickupAvailable, selectedState,
         </label>
         <textarea
           value={formData.note}
-          onChange={(e: React.ChangeEvent<HTMLInputElement>) => setFormData({...formData, note: e.target.value})}
+          onChange={(e: React.ChangeEvent<HTMLTextAreaElement>) => setFormData({...formData, note: e.target.value})}
           placeholder="Any special instructions or notes for your order..."
           className="w-full border border-gray-300 text-black rounded-lg px-3 sm:px-4 py-2 sm:py-3 h-24 sm:h-32 text-sm"
           rows={3}
