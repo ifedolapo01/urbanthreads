@@ -383,8 +383,8 @@ function CustomerInformation({ deliveryOption, isPickupAvailable, selectedState,
           selectedState={selectedState}
           address={formData.address}
           city={formData.city}
-          setAddress={(value) => setFormData({...formData, address: value})}
-          setCity={(value) => setFormData({...formData, city: value})}
+          setAddress={(value: string) => setFormData({...formData, address: value})}
+          setCity={(value: string) => setFormData({...formData, city: value})}
         />
       )}
       
