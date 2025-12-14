@@ -18,8 +18,8 @@ export default function RootLayout({
   children: React.ReactNode;
 }>) {
   return (
-    <html lang="en" style={{ overflowX: 'hidden' }}>
-      <body className={inter.className}>
+    <html lang="en" style={{ overflowX: 'hidden' }} suppressHydrationWarning>
+      <body className={inter.className} suppressHydrationWarning>
         <CartProvider>
           <Header />
           <main className="min-h-screen overflow-x-hidden">{children}</main>

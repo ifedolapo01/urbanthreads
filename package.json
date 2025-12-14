@@ -8,16 +8,22 @@
     "start": "next start"
   },
   "dependencies": {
+    "@prisma/client": "^6.19.1",
+    "@supabase/supabase-js": "^2.87.1",
     "cloudinary": "^2.8.0",
+    "dotenv": "^17.2.3",
     "lucide-react": "^0.556.0",
     "multer": "^2.0.2",
     "next": "16.0.8",
     "nodemailer": "^7.0.11",
+    "prisma": "^6.19.1",
     "react": "19.2.1",
     "react-dom": "19.2.1",
+    "resend": "^6.6.0",
     "sharp": "^0.34.5"
   },
   "devDependencies": {
+    "@supabase/ssr": "^0.8.0",
     "@tailwindcss/postcss": "^4",
     "@types/node": "^20",
     "@types/nodemailer": "^7.0.4",

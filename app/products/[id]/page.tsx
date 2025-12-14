@@ -1,22 +1,44 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { useParams } from 'next/navigation';
-import { products } from '@/lib/data';
 import { useCart } from '@/components/CartProvider';
+import { getProduct, Product } from '@/lib/supabase/actions';
 import { Star, Truck, Shield, ChevronLeft, Share2, Heart } from 'lucide-react';
 import Link from 'next/link';
 
 export default function ProductDetailPage() {
   const params = useParams();
-  const product = products.find(p => p.id === params.id);
   const { addToCart } = useCart();
   
+  const [product, setProduct] = useState<Product | null>(null);
+  const [loading, setLoading] = useState(true);
   const [selectedSize, setSelectedSize] = useState<string>('');
   const [selectedColor, setSelectedColor] = useState<string>('');
   const [quantity, setQuantity] = useState(1);
   const [currentImageIndex, setCurrentImageIndex] = useState(0);
   const [isWishlisted, setIsWishlisted] = useState(false);
+
+  useEffect(() => {
+    loadProduct();
+  }, [params.id]);
+
+  const loadProduct = async () => {
+    if (!params.id) return;
+    
+    setLoading(true);
+    const data = await getProduct(params.id as string);
+    setProduct(data);
+    setLoading(false);
+  };
+
+  if (loading) {
+    return (
+      <div className="container mx-auto px-4 py-16 text-center">
+        <div className="animate-pulse">Loading...</div>
+      </div>
+    );
+  }
 
   if (!product) {
     return (
@@ -38,12 +60,17 @@ export default function ProductDetailPage() {
       return;
     }
     
+    if (product.stock < quantity) {
+      alert(`Only ${product.stock} items available in stock`);
+      return;
+    }
+    
     addToCart({
       productId: product.id,
       name: product.name,
-      price: product.price, // In Naira
+      price: product.price,
       quantity,
-      image: product.image,
+      image: product.main_image,
       size: selectedSize,
       color: selectedColor
     });
@@ -63,10 +90,8 @@ export default function ProductDetailPage() {
   };
 
   const productImages = [
-    product.image,
-    product.image, // In real app, you'd have multiple images
-    product.image,
-    product.image
+    product.main_image,
+    ...product.images
   ];
 
   return (

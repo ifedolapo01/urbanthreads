@@ -5,6 +5,8 @@ import { useCart } from '@/components/CartProvider';
 import { ArrowLeft } from 'lucide-react';
 import Link from 'next/link';
 
+import { createClient } from '@/lib/supabase/client';
+
 import CheckoutSteps from '@/components/checkout/CheckoutSteps';
 import EmptyCart from '@/components/checkout/EmptyCart';
 import StateDeliveryForm from '@/components/checkout/StateDeliveryForm';
@@ -69,80 +71,80 @@ export default function CheckoutPage() {
     }
   };
 
-  const handleSendReceipt = async () => {
-    if (!uploadedReceipt) {
-      alert('Please upload your payment receipt first.');
-      return;
-    }
+  // app/checkout/page.tsx - Update the handleSendReceipt function
+const handleSendReceipt = async () => {
+  if (!uploadedReceipt) {
+    alert('Please upload your payment receipt first.');
+    return;
+  }
 
-    setIsProcessing(true);
+  setIsProcessing(true);
 
-    try {
-      // Prepare order data
-      const orderData = {
-        orderNumber,
-        customerName: `${formData.firstName} ${formData.lastName}`,
-        customerEmail: formData.email,
-        customerPhone: formData.phone,
-        total: orderTotal,
-        deliveryOption,
-        selectedState,
-        items: items.map(item => ({
-          name: item.name,
-          size: item.size,
-          color: item.color,
-          quantity: item.quantity,
-          price: item.price,
-        })),
-        pickupAddress,
-        deliveryAddress: deliveryOption === 'delivery' ? `${formData.address}, ${formData.city}` : null,
-        note: formData.note,
-        timestamp: new Date().toISOString(),
-      };
+  try {
+    // Upload receipt to Supabase Storage
+    const supabase = createClient();
+    const fileName = `${orderNumber}-${Date.now()}.jpg`;
+    
+    // Convert base64 to blob
+    const base64Response = await fetch(uploadedReceipt);
+    const blob = await base64Response.blob();
+    
+    const { error: uploadError } = await supabase.storage
+      .from('receipts')
+      .upload(fileName, blob);
 
-      // Send order to backend
-      const response = await fetch('/api/send-order', {
-        method: 'POST',
-        headers: {
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify(orderData),
-      });
+    if (uploadError) throw uploadError;
 
-      const result = await response.json();
+    const { data: { publicUrl } } = supabase.storage
+      .from('receipts')
+      .getPublicUrl(fileName);
 
-      if (result.success) {
-        // Success! Clear cart and show confirmation
-        clearCart();
-        setStep('confirmation');
-      } else {
-        throw new Error(result.error || 'Failed to submit order');
-      }
+    // Create order in database
+    const orderData = {
+      order_number: orderNumber,
+      customer_name: `${formData.firstName} ${formData.lastName}`,
+      customer_email: formData.email,
+      customer_phone: formData.phone,
+      total_amount: total,
+      delivery_option: deliveryOption,
+      selected_state: selectedState,
+      delivery_address: deliveryOption === 'delivery' ? formData.address : null,
+      city: formData.city,
+      note: formData.note,
+      receipt_url: publicUrl,
+      items: items.map(item => ({
+        product_id: item.productId,
+        product_name: item.name,
+        price: item.price,
+        quantity: item.quantity,
+        size: item.size,
+        color: item.color,
+      }))
+    };
 
-    } catch (error: any) {
-      console.error('Order submission error:', error);
-      
-      // Show user-friendly error message
-      let errorMessage = 'Failed to submit order. ';
-      
-      if (error.message.includes('network') || error.message.includes('fetch')) {
-        errorMessage += 'Please check your internet connection and try again.';
-      } else if (error.message.includes('email')) {
-        errorMessage += 'There was an issue sending the confirmation email. Your order was received but please save your order number for reference.';
-      } else {
-        errorMessage += 'Please try again or contact support at 0809 653 9067.';
-      }
-      
-      alert(errorMessage);
-      
-      // Still proceed to confirmation but show warning
+    // Save to database
+    const response = await fetch('/api/orders', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(orderData),
+    });
+
+    const result = await response.json();
+
+    if (result.success) {
       clearCart();
       setStep('confirmation');
-      
-    } finally {
-      setIsProcessing(false);
+    } else {
+      throw new Error(result.error);
     }
-  };
+
+  } catch (error: any) {
+    console.error('Order submission error:', error);
+    alert('Failed to submit order. Please try again or contact support.');
+  } finally {
+    setIsProcessing(false);
+  }
+};
 
   if (items.length === 0 && step !== 'confirmation') {
     return <EmptyCart />;
