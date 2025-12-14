@@ -1,13 +1,70 @@
 import ProductCard from '@/components/ProductCard';
-import { products } from '@/lib/data';
 import Link from 'next/link';
+import { createClient } from '@/lib/supabase/client';
 
-export default function Home() {
+export default async function HomePage() {
+  const supabase = createClient();
+  
+  // Fetch featured products from Supabase
+  const { data: products, error } = await supabase
+    .from('products')
+    .select('*')
+    .eq('is_active', true)
+    .order('created_at', { ascending: false })
+    .limit(8);
+
+  if (error) {
+    console.error('Error fetching products:', error);
+    // You can show an error state or fallback
+    return (
+      <div className="min-h-screen flex items-center justify-center">
+        <div className="text-center">
+          <h2 className="text-2xl font-bold text-gray-700 mb-2">Error loading products</h2>
+          <p className="text-gray-500">Please try again later</p>
+        </div>
+      </div>
+    );
+  }
+
+  // If no products in database yet, show empty state
+  if (!products || products.length === 0) {
+    return (
+      <div>
+        {/* Hero Section - Keep this as it is */}
+        <section className="bg-gradient-to-r from-gray-900 to-gray-800 text-white">
+          <div className="container mx-auto px-4 py-12 md:py-32">
+            <div className="max-w-2xl">
+              <h1 className="text-3xl sm:text-4xl md:text-6xl font-bold mb-4 md:mb-6">
+                Modern Streetwear for Everyday
+              </h1>
+              <p className="text-base sm:text-lg md:text-xl mb-6 md:mb-8 text-gray-300">
+                Discover minimalist designs crafted for comfort and style. Quality clothing that fits your lifestyle.
+              </p>
+              <Link 
+                href="/admin" 
+                className="inline-block bg-white text-gray-900 px-6 py-3 md:px-8 md:py-3 rounded-lg font-semibold hover:bg-gray-100 transition-colors text-sm md:text-base"
+              >
+                Add Products (Admin)
+              </Link>
+            </div>
+          </div>
+        </section>
+
+        <section className="py-16">
+          <div className="container mx-auto px-4 text-center">
+            <h2 className="text-2xl md:text-3xl font-bold mb-4">No Products Yet</h2>
+            <p className="text-gray-600 mb-8">Products will appear here once added by the admin.</p>
+          </div>
+        </section>
+      </div>
+    );
+  }
+
   const featuredProducts = products.slice(0, 4);
 
   return (
     <div>
-      {/* Hero Section */}
+      {/* Hero Section - Keep as is */}
       <section className="bg-gradient-to-r from-gray-900 to-gray-800 text-white">
         <div className="container mx-auto px-4 py-12 md:py-32">
           <div className="max-w-2xl">
