@@ -4,6 +4,8 @@ import './globals.css';
 import Header from '@/components/Header';
 import { CartProvider } from '@/components/CartProvider';
 
+import { Analytics } from "@vercel/analytics/next"
+
 const inter = Inter({ subsets: ['latin'] });
 
 export const metadata: Metadata = {
