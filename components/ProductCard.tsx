@@ -1,4 +1,4 @@
-// components/ProductCard.tsx
+// components/ProductCard.tsx - Server Component version
 import Link from 'next/link';
 
 // Define a more flexible product type
@@ -23,6 +23,7 @@ interface ProductCardProps {
 export default function ProductCard({ product }: ProductCardProps) {
   // Use defaults for missing fields
   const isOutOfStock = (product.stock || 0) <= 0;
+  // Use a fallback image without onError handler
   const imageUrl = product.main_image || product.image || '/placeholder.jpg';
   const description = product.description || '';
   const category = product.category || '';
@@ -45,16 +46,13 @@ export default function ProductCard({ product }: ProductCardProps) {
         )}
 
         <div className="relative h-64 w-full overflow-hidden">
+          {/* Remove onError handler for server component */}
           <img
             src={imageUrl}
             alt={product.name}
             className={`w-full h-full object-cover group-hover:scale-110 transition-transform duration-500 ${
               isOutOfStock ? 'opacity-70' : ''
             }`}
-            onError={(e) => {
-              // Fallback image if the main image fails to load
-              (e.target as HTMLImageElement).src = '/placeholder.jpg';
-            }}
           />
           <div className="absolute top-2 right-2 bg-white px-2 py-1 rounded-md text-sm font-semibold text-black">
             ₦{product.price.toLocaleString()}

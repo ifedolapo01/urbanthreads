@@ -11,8 +11,12 @@ const inter = Inter({ subsets: ['latin'] });
 export const metadata: Metadata = {
   title: 'UrbanThreads Co. | Modern Streetwear',
   description: 'Minimalist clothing for everyday comfort and style',
-  viewport: 'width=device-width, initial-scale=1, maximum-scale=1',
 };
+
+export const viewport = {
+  width: 'device-width',
+  initialScale: 1,
+}
 
 export default function RootLayout({
   children,
