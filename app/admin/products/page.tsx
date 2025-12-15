@@ -1,8 +1,8 @@
 // app/admin/products/page.tsx - FIXED CLIENT COMPONENT
 'use client';
 
-import { useState, useRef } from 'react';
-import { Upload, X } from 'lucide-react';
+import { useState, useRef, useEffect } from 'react';
+import { Upload, X, CheckCircle } from 'lucide-react';
 import { uploadProductImage } from '@/app/actions/upload';
 
 export default function AdminProducts() {
@@ -20,6 +20,17 @@ export default function AdminProducts() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
+  const [successMessage, setSuccessMessage] = useState('');
+
+  // Clear success message after 5 seconds
+  useEffect(() => {
+    if (successMessage) {
+      const timer = setTimeout(() => {
+        setSuccessMessage('');
+      }, 5000);
+      return () => clearTimeout(timer);
+    }
+  }, [successMessage]);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -27,143 +38,144 @@ export default function AdminProducts() {
       setMainImage(file);
       setImagePreview(URL.createObjectURL(file));
       setError('');
+      setSuccessMessage(''); // Clear success when new image is selected
     }
   };
 
-  // In app/admin/products/page.tsx - MOBILE OPTIMIZATIONS
-const handleSubmit = async (e: React.FormEvent) => {
-  e.preventDefault();
-  setIsSubmitting(true);
-  setError('');
+  const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setIsSubmitting(true);
+    setError('');
+    setSuccessMessage('');
 
-  // Mobile: Disable form during submission
-  const form = e.target as HTMLFormElement;
-  const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
-  
-  if (submitButton) {
-    submitButton.disabled = true;
-    submitButton.innerHTML = 'Uploading...';
-  }
-
-  try {
-    // 1. Upload image with mobile optimizations
-    if (!mainImage) {
-      throw new Error('Please select an image');
-    }
-
-    // Mobile: Check image size before upload
-    if (mainImage.size > 3 * 1024 * 1024) { // 3MB
-      throw new Error(`Image too large (${(mainImage.size / 1024 / 1024).toFixed(1)}MB). Max 3MB. Compress or use a smaller image.`);
-    }
-
-    console.log('Mobile upload starting...');
+    // Mobile: Disable form during submission
+    const form = e.target as HTMLFormElement;
+    const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     
-    const uploadFormData = new FormData();
-    uploadFormData.append('image', mainImage);
-    
-    const uploadResult = await uploadProductImage(uploadFormData);
-    
-    if (uploadResult.error) {
-      throw new Error(uploadResult.error);
-    }
-
-    console.log('Mobile upload successful, creating product...');
-
-    // 2. Prepare product data
-    const productData = {
-      name: formData.name,
-      description: formData.description,
-      price: formData.price,
-      category: formData.category,
-      main_image: uploadResult.url!,
-      images: [],
-      colors: formData.colors.filter(c => c.trim() !== ''),
-      sizes: formData.sizes.filter(s => s.trim() !== ''),
-      stock: formData.stock,
-    };
-
-    // 3. Mobile-friendly fetch with timeout
-    const controller = new AbortController();
-    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
-    
-    try {
-      const response = await fetch('/api/admin/products', {
-        method: 'POST',
-        headers: { 
-          'Content-Type': 'application/json',
-          'X-Mobile-Request': 'true' // Add mobile header
-        },
-        body: JSON.stringify(productData),
-        signal: controller.signal
-      });
-      
-      clearTimeout(timeoutId);
-      
-      const result = await response.json();
-      
-      if (!result.success) {
-        // Mobile-friendly error messages
-        if (result.error.includes('timeout') || result.error.includes('network')) {
-          throw new Error('Connection issue. Please check your internet and try again.');
-        }
-        throw new Error(result.error || 'Failed to save product');
-      }
-
-      // Success!
-      alert('✅ Product added successfully!');
-      
-      // Reset form
-      setFormData({
-        name: '',
-        description: '',
-        price: 0,
-        category: 'men',
-        stock: 0,
-        colors: [''],
-        sizes: ['']
-      });
-      setMainImage(null);
-      setImagePreview('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      
-    } catch (fetchError: any) {
-      // Handle abort/timeout
-      if (fetchError.name === 'AbortError') {
-        throw new Error('Request timeout. Try a smaller image or better connection.');
-      }
-      throw fetchError;
-    }
-    
-  } catch (error: any) {
-    console.error('Mobile submit error:', error);
-    
-    // Mobile-friendly error display
-    const errorMessage = error.message || 'Unknown error';
-    
-    if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
-      setError(`📶 Connection issue: ${errorMessage}. Try with smaller images.`);
-    } else if (errorMessage.includes('large')) {
-      setError(`📸 ${errorMessage}. Use smaller images on mobile.`);
-    } else {
-      setError(`❌ ${errorMessage}`);
-    }
-    
-  } finally {
-    setIsSubmitting(false);
-    
-    // Re-enable form
     if (submitButton) {
-      submitButton.disabled = false;
-      submitButton.innerHTML = '📦 Add Product to Store';
+      submitButton.disabled = true;
+      submitButton.innerHTML = '<span class="flex items-center justify-center"><svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Uploading...</span>';
     }
-  }
-};
+
+    try {
+      // 1. Upload image with mobile optimizations
+      if (!mainImage) {
+        throw new Error('Please select an image');
+      }
+
+      // Mobile: Check image size before upload
+      if (mainImage.size > 3 * 1024 * 1024) { // 3MB
+        throw new Error(`Image too large (${(mainImage.size / 1024 / 1024).toFixed(1)}MB). Max 3MB. Compress or use a smaller image.`);
+      }
+
+      console.log('Upload starting...');
+      
+      const uploadFormData = new FormData();
+      uploadFormData.append('image', mainImage);
+      
+      const uploadResult = await uploadProductImage(uploadFormData);
+      
+      if (uploadResult.error) {
+        throw new Error(uploadResult.error);
+      }
+
+      console.log('Upload successful, creating product...');
+
+      // 2. Prepare product data
+      const productData = {
+        name: formData.name,
+        description: formData.description,
+        price: formData.price,
+        category: formData.category,
+        main_image: uploadResult.url!,
+        images: [],
+        colors: formData.colors.filter(c => c.trim() !== ''),
+        sizes: formData.sizes.filter(s => s.trim() !== ''),
+        stock: formData.stock,
+      };
+
+      // 3. Mobile-friendly fetch with timeout
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
+      
+      try {
+        const response = await fetch('/api/admin/products', {
+          method: 'POST',
+          headers: { 
+            'Content-Type': 'application/json',
+          },
+          body: JSON.stringify(productData),
+          signal: controller.signal
+        });
+        
+        clearTimeout(timeoutId);
+        
+        const result = await response.json();
+        
+        if (!result.success) {
+          // Mobile-friendly error messages
+          if (result.error.includes('timeout') || result.error.includes('network')) {
+            throw new Error('Connection issue. Please check your internet and try again.');
+          }
+          throw new Error(result.error || 'Failed to save product');
+        }
+
+        // Success! - Show success message instead of alert
+        setSuccessMessage('✅ Product added successfully!');
+        
+        // Reset form
+        setFormData({
+          name: '',
+          description: '',
+          price: 0,
+          category: 'men',
+          stock: 0,
+          colors: [''],
+          sizes: ['']
+        });
+        setMainImage(null);
+        setImagePreview('');
+        if (fileInputRef.current) {
+          fileInputRef.current.value = '';
+        }
+        
+      } catch (fetchError: any) {
+        // Handle abort/timeout
+        if (fetchError.name === 'AbortError') {
+          throw new Error('Request timeout. Try a smaller image or better connection.');
+        }
+        throw fetchError;
+      }
+      
+    } catch (error: any) {
+      console.error('Submit error:', error);
+      
+      // Mobile-friendly error display
+      const errorMessage = error.message || 'Unknown error';
+      
+      if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
+        setError(`📶 Connection issue: ${errorMessage}. Try with smaller images.`);
+      } else if (errorMessage.includes('large')) {
+        setError(`📸 ${errorMessage}. Use smaller images on mobile.`);
+      } else {
+        setError(`❌ ${errorMessage}`);
+      }
+      
+    } finally {
+      setIsSubmitting(false);
+      
+      // Re-enable form
+      if (submitButton) {
+        submitButton.disabled = false;
+        submitButton.innerHTML = '📦 Add Product to Store';
+      }
+    }
+  };
 
   // Add color input
   const addColorInput = () => {
     setFormData({...formData, colors: [...formData.colors, '']});
+    setError(''); // Clear errors when adding new color
   };
 
   const removeColorInput = (index: number) => {
@@ -180,6 +192,7 @@ const handleSubmit = async (e: React.FormEvent) => {
   // Add size input
   const addSizeInput = () => {
     setFormData({...formData, sizes: [...formData.sizes, '']});
+    setError(''); // Clear errors when adding new size
   };
 
   const removeSizeInput = (index: number) => {
@@ -200,6 +213,17 @@ const handleSubmit = async (e: React.FormEvent) => {
         <p className="text-gray-600">Upload products to your store</p>
       </div>
       
+      {/* Success Message */}
+      {successMessage && (
+        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg animate-fadeIn">
+          <div className="flex items-center">
+            <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
+            <p className="text-green-800 font-medium">{successMessage}</p>
+          </div>
+        </div>
+      )}
+      
+      {/* Error Message */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-600 font-medium">Error: {error}</p>
@@ -219,6 +243,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             placeholder="e.g., Essential Cotton Tee"
             required
+            disabled={isSubmitting}
           />
         </div>
 
@@ -232,6 +257,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             onChange={(e) => setFormData({...formData, description: e.target.value})}
             className="w-full border border-gray-300 rounded-lg px-4 py-3 h-32 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             placeholder="Describe your product..."
+            disabled={isSubmitting}
           />
         </div>
 
@@ -253,9 +279,11 @@ const handleSubmit = async (e: React.FormEvent) => {
                   onClick={() => {
                     setMainImage(null);
                     setImagePreview('');
+                    setError('');
                   }}
                   className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
                   title="Remove image"
+                  disabled={isSubmitting}
                 >
                   <X size={16} />
                 </button>
@@ -264,7 +292,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               <>
                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
                 <p className="text-gray-600 mb-1">Click to upload product image</p>
-                <p className="text-sm text-gray-500">PNG, JPG, GIF up to 5MB</p>
+                <p className="text-sm text-gray-500">PNG, JPG, GIF up to 3MB</p>
               </>
             )}
             <input
@@ -275,10 +303,15 @@ const handleSubmit = async (e: React.FormEvent) => {
               className="hidden"
               id="image-upload"
               required
+              disabled={isSubmitting}
             />
             <label
               htmlFor="image-upload"
-              className="mt-4 inline-block bg-blue-600 text-white px-6 py-3 rounded-lg font-medium hover:bg-blue-700 cursor-pointer transition-colors"
+              className={`mt-4 inline-block px-6 py-3 rounded-lg font-medium cursor-pointer transition-colors ${
+                isSubmitting 
+                  ? 'bg-gray-400 text-gray-700 cursor-not-allowed' 
+                  : 'bg-blue-600 text-white hover:bg-blue-700'
+              }`}
             >
               {mainImage ? 'Change Image' : 'Choose Image'}
             </label>
@@ -300,6 +333,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               step="100"
               placeholder="8500"
               required
+              disabled={isSubmitting}
             />
           </div>
           <div>
@@ -314,6 +348,7 @@ const handleSubmit = async (e: React.FormEvent) => {
               min="0"
               placeholder="50"
               required
+              disabled={isSubmitting}
             />
           </div>
         </div>
@@ -328,6 +363,7 @@ const handleSubmit = async (e: React.FormEvent) => {
             onChange={(e) => setFormData({...formData, category: e.target.value})}
             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             required
+            disabled={isSubmitting}
           >
             <option value="men">Men</option>
             <option value="women">Women</option>
@@ -344,7 +380,10 @@ const handleSubmit = async (e: React.FormEvent) => {
             <button
               type="button"
               onClick={addColorInput}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className={`text-sm ${
+                isSubmitting ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'
+              }`}
+              disabled={isSubmitting}
             >
               + Add color
             </button>
@@ -358,12 +397,14 @@ const handleSubmit = async (e: React.FormEvent) => {
                 className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-black"
                 placeholder="e.g., Black"
                 required={index === 0}
+                disabled={isSubmitting}
               />
               {formData.colors.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeColorInput(index)}
-                  className="px-4 text-red-600 hover:bg-red-50 rounded-lg"
+                  className="px-4 text-red-600 hover:bg-red-50 rounded-lg disabled:text-gray-400"
+                  disabled={isSubmitting}
                 >
                   Remove
                 </button>
@@ -381,7 +422,10 @@ const handleSubmit = async (e: React.FormEvent) => {
             <button
               type="button"
               onClick={addSizeInput}
-              className="text-sm text-blue-600 hover:text-blue-800"
+              className={`text-sm ${
+                isSubmitting ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'
+              }`}
+              disabled={isSubmitting}
             >
               + Add size
             </button>
@@ -395,12 +439,14 @@ const handleSubmit = async (e: React.FormEvent) => {
                 className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-black"
                 placeholder="e.g., M"
                 required={index === 0}
+                disabled={isSubmitting}
               />
               {formData.sizes.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeSizeInput(index)}
-                  className="px-4 text-red-600 hover:bg-red-50 rounded-lg"
+                  className="px-4 text-red-600 hover:bg-red-50 rounded-lg disabled:text-gray-400"
+                  disabled={isSubmitting}
                 >
                   Remove
                 </button>
@@ -413,7 +459,7 @@ const handleSubmit = async (e: React.FormEvent) => {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-green-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
+          className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center">
