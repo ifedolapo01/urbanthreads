@@ -1,11 +1,10 @@
-// app/actions/upload.ts - SIMPLIFIED VERSION
+// app/actions/upload.ts - UPDATE FOR MOBILE
 'use server';
 
 import { createClient } from '@supabase/supabase-js';
 
 export async function uploadProductImage(formData: FormData) {
   try {
-    // Use service role client
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -23,25 +22,43 @@ export async function uploadProductImage(formData: FormData) {
       return { error: 'No file provided' };
     }
 
-    // Check file size
-    if (file.size > 5 * 1024 * 1024) {
-      return { error: 'File size must be less than 5MB' };
+    // Mobile-specific checks
+    const maxSize = 3 * 1024 * 1024; // 3MB for mobile (was 5MB)
+    if (file.size > maxSize) {
+      return { 
+        error: `File too large (${(file.size / 1024 / 1024).toFixed(1)}MB). Max size is 3MB. Compress your image first.` 
+      };
     }
 
-    const fileName = `${Date.now()}-${file.name.replace(/\s+/g, '-').toLowerCase()}`;
+    // Check file type
+    const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp'];
+    if (!allowedTypes.includes(file.type)) {
+      return { error: `Invalid file type: ${file.type}. Use JPEG, PNG, or WebP.` };
+    }
+
+    const fileName = `mobile_${Date.now()}_${Math.random().toString(36).substring(2, 9)}.${file.type.split('/')[1]}`;
     const fileBuffer = await file.arrayBuffer();
 
-    // Upload with admin client
-    const { error: uploadError } = await supabaseAdmin.storage
+    // Upload with timeout for mobile networks
+    const uploadPromise = supabaseAdmin.storage
       .from('product_images')
       .upload(fileName, fileBuffer, {
         contentType: file.type,
         upsert: false,
       });
 
+    // Add timeout for mobile networks
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Upload timeout after 30 seconds')), 30000);
+    });
+
+    const { error: uploadError } = await Promise.race([uploadPromise, timeoutPromise]) as any;
+
     if (uploadError) {
       console.error('Upload error:', uploadError);
-      return { error: `Upload failed: ${uploadError.message}` };
+      return { 
+        error: `Upload failed: ${uploadError.message}. Try a smaller image or better connection.` 
+      };
     }
 
     // Get public URL
@@ -49,9 +66,20 @@ export async function uploadProductImage(formData: FormData) {
       .from('product_images')
       .getPublicUrl(fileName);
 
-    return { success: true, url: publicUrl };
+    return { 
+      success: true, 
+      url: publicUrl,
+      fileName,
+      size: file.size
+    };
   } catch (error: any) {
     console.error('Upload action error:', error);
-    return { error: `Server error: ${error.message}` };
+    
+    // Mobile-friendly error messages
+    if (error.message.includes('timeout')) {
+      return { error: 'Upload took too long. Check your internet connection and try a smaller image.' };
+    }
+    
+    return { error: `Upload failed: ${error.message}. Please try again.` };
   }
 }

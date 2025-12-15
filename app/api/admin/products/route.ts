@@ -1,12 +1,35 @@
-// app/api/admin/products/route.ts - FINAL WORKING VERSION
+// app/api/admin/products/route.ts - MOBILE OPTIMIZED
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
+// Increase timeout for mobile
+export const maxDuration = 30; // 30 seconds for mobile
+
 export async function POST(request: NextRequest) {
-  console.log('📦 Product creation API called');
+  console.log('📱 Mobile product creation API called');
+  
+  // Add CORS headers for mobile
+  const headers = {
+    'Access-Control-Allow-Origin': '*',
+    'Access-Control-Allow-Methods': 'POST, OPTIONS',
+    'Access-Control-Allow-Headers': 'Content-Type, Authorization',
+    'Content-Type': 'application/json'
+  };
   
   try {
-    // Create Supabase client with service role
+    // Handle OPTIONS preflight for CORS
+    if (request.method === 'OPTIONS') {
+      return new NextResponse(null, { status: 200, headers });
+    }
+    
+    // Parse with timeout for mobile
+    const timeoutPromise = new Promise((_, reject) => {
+      setTimeout(() => reject(new Error('Request timeout')), 25000);
+    });
+    
+    const body = await Promise.race([request.json(), timeoutPromise]) as any;
+    
+    // Create client
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -14,30 +37,30 @@ export async function POST(request: NextRequest) {
         auth: {
           autoRefreshToken: false,
           persistSession: false
+        },
+        global: {
+          headers: {
+            'Content-Type': 'application/json',
+            'Accept': 'application/json'
+          }
         }
       }
     );
     
-    // Parse request body
-    const body = await request.json();
-    
-    // Validate required fields
-    if (!body.name || !body.price || !body.category) {
+    // Validate
+    if (!body.name || !body.price) {
       return NextResponse.json(
-        { 
-          success: false, 
-          error: 'Missing required fields: name, price, and category are required' 
-        },
-        { status: 400 }
+        { success: false, error: 'Product name and price are required' },
+        { status: 400, headers }
       );
     }
     
-    // Prepare product data
+    // Prepare data
     const productData = {
-      name: body.name,
-      description: body.description || '',
+      name: body.name.substring(0, 100), // Limit length for mobile
+      description: (body.description || '').substring(0, 500),
       price: Number(body.price),
-      category: body.category,
+      category: body.category || 'men',
       main_image: body.main_image || '',
       images: body.images || [],
       colors: body.colors || [],
@@ -48,75 +71,74 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString()
     };
     
-    console.log('Creating product:', productData.name);
+    console.log('Creating product from mobile:', productData.name);
     
-    // Insert product
-    const { data, error } = await supabase
-      .from('products')
-      .insert([productData])
-      .select()
-      .single();
-
-    if (error) {
-      console.error('Product creation error:', error);
-      return NextResponse.json(
-        { 
-          success: false, 
-          error: error.message,
-          code: error.code
-        },
-        { status: 500 }
-      );
+    // Insert with retry for mobile networks
+    let retries = 3;
+    let lastError;
+    
+    while (retries > 0) {
+      try {
+        const { data, error } = await supabase
+          .from('products')
+          .insert([productData])
+          .select()
+          .single();
+        
+        if (error) throw error;
+        
+        console.log('✅ Mobile product created:', data.id);
+        
+        return NextResponse.json(
+          { 
+            success: true, 
+            product: data,
+            message: 'Product created successfully'
+          },
+          { headers }
+        );
+        
+      } catch (error: any) {
+        lastError = error;
+        retries--;
+        console.log(`Retry ${3 - retries}/3 failed:`, error.message);
+        
+        if (retries > 0) {
+          // Wait before retry
+          await new Promise(resolve => setTimeout(resolve, 1000));
+        }
+      }
     }
-
-    console.log('✅ Product created successfully:', data.id);
     
-    return NextResponse.json({ 
-      success: true, 
-      product: data,
-      message: 'Product created successfully'
-    });
+    // All retries failed
+    console.error('❌ All retries failed:', lastError);
     
-  } catch (error: any) {
-    console.error('Unexpected error:', error);
     return NextResponse.json(
       { 
         success: false, 
-        error: 'Internal server error',
-        details: error.message 
+        error: 'Network error. Please check connection and try again.',
+        details: lastError?.message 
       },
-      { status: 500 }
+      { status: 500, headers }
     );
-  }
-}
-
-// GET endpoint for testing
-export async function GET() {
-  try {
-    const supabase = createClient(
-      process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
-    );
-    
-    const { data, error } = await supabase
-      .from('products')
-      .select('*')
-      .eq('is_active', true)
-      .order('created_at', { ascending: false })
-      .limit(10);
-
-    if (error) throw error;
-
-    return NextResponse.json({ 
-      success: true, 
-      count: data?.length || 0,
-      products: data 
-    });
     
   } catch (error: any) {
+    console.error('Mobile API error:', error);
+    
+    let errorMessage = 'Server error';
+    if (error.message.includes('timeout')) {
+      errorMessage = 'Request timeout. Your connection is slow. Try a smaller image.';
+    } else if (error.message.includes('network')) {
+      errorMessage = 'Network error. Check your internet connection.';
+    }
+    
     return NextResponse.json(
-      { success: false, error: error.message },
-      { status: 500 }
+      { 
+        success: false, 
+        error: errorMessage,
+        type: 'mobile_error'
+      },
+      { status: 500, headers }
     );
   }
 }

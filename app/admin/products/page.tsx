@@ -30,21 +30,44 @@ export default function AdminProducts() {
     }
   };
 
-  // In app/admin/products/page.tsx - Update handleSubmit
+  // In app/admin/products/page.tsx - MOBILE OPTIMIZATIONS
 const handleSubmit = async (e: React.FormEvent) => {
   e.preventDefault();
   setIsSubmitting(true);
   setError('');
 
+  // Mobile: Disable form during submission
+  const form = e.target as HTMLFormElement;
+  const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
+  
+  if (submitButton) {
+    submitButton.disabled = true;
+    submitButton.innerHTML = 'Uploading...';
+  }
+
   try {
-    // 1. Upload image
+    // 1. Upload image with mobile optimizations
+    if (!mainImage) {
+      throw new Error('Please select an image');
+    }
+
+    // Mobile: Check image size before upload
+    if (mainImage.size > 3 * 1024 * 1024) { // 3MB
+      throw new Error(`Image too large (${(mainImage.size / 1024 / 1024).toFixed(1)}MB). Max 3MB. Compress or use a smaller image.`);
+    }
+
+    console.log('Mobile upload starting...');
+    
     const uploadFormData = new FormData();
-    uploadFormData.append('image', mainImage!);
+    uploadFormData.append('image', mainImage);
+    
     const uploadResult = await uploadProductImage(uploadFormData);
     
     if (uploadResult.error) {
-      throw new Error(`Image upload failed: ${uploadResult.error}`);
+      throw new Error(uploadResult.error);
     }
+
+    console.log('Mobile upload successful, creating product...');
 
     // 2. Prepare product data
     const productData = {
@@ -59,49 +82,82 @@ const handleSubmit = async (e: React.FormEvent) => {
       stock: formData.stock,
     };
 
-    console.log('Sending product data:', productData);
-
-    // 3. Send to API
-    const response = await fetch('/api/admin/products', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify(productData),
-    });
-
-    const result = await response.json();
+    // 3. Mobile-friendly fetch with timeout
+    const controller = new AbortController();
+    const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
     
-    if (!result.success) {
-      // Check for specific error
-      if (result.code === '42501') {
-        throw new Error('Permission denied. The service role cannot insert products. Run the SQL fix.');
+    try {
+      const response = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 
+          'Content-Type': 'application/json',
+          'X-Mobile-Request': 'true' // Add mobile header
+        },
+        body: JSON.stringify(productData),
+        signal: controller.signal
+      });
+      
+      clearTimeout(timeoutId);
+      
+      const result = await response.json();
+      
+      if (!result.success) {
+        // Mobile-friendly error messages
+        if (result.error.includes('timeout') || result.error.includes('network')) {
+          throw new Error('Connection issue. Please check your internet and try again.');
+        }
+        throw new Error(result.error || 'Failed to save product');
       }
-      throw new Error(result.error || 'Failed to save product');
-    }
 
-    // 4. Success!
-    alert(`✅ ${result.message || 'Product added successfully!'}`);
-    
-    // 5. Reset form
-    setFormData({
-      name: '',
-      description: '',
-      price: 0,
-      category: 'men',
-      stock: 0,
-      colors: [''],
-      sizes: ['']
-    });
-    setMainImage(null);
-    setImagePreview('');
-    if (fileInputRef.current) {
-      fileInputRef.current.value = '';
+      // Success!
+      alert('✅ Product added successfully!');
+      
+      // Reset form
+      setFormData({
+        name: '',
+        description: '',
+        price: 0,
+        category: 'men',
+        stock: 0,
+        colors: [''],
+        sizes: ['']
+      });
+      setMainImage(null);
+      setImagePreview('');
+      if (fileInputRef.current) {
+        fileInputRef.current.value = '';
+      }
+      
+    } catch (fetchError: any) {
+      // Handle abort/timeout
+      if (fetchError.name === 'AbortError') {
+        throw new Error('Request timeout. Try a smaller image or better connection.');
+      }
+      throw fetchError;
     }
     
   } catch (error: any) {
-    console.error('Submit error:', error);
-    setError(`Error: ${error.message}`);
+    console.error('Mobile submit error:', error);
+    
+    // Mobile-friendly error display
+    const errorMessage = error.message || 'Unknown error';
+    
+    if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
+      setError(`📶 Connection issue: ${errorMessage}. Try with smaller images.`);
+    } else if (errorMessage.includes('large')) {
+      setError(`📸 ${errorMessage}. Use smaller images on mobile.`);
+    } else {
+      setError(`❌ ${errorMessage}`);
+    }
+    
   } finally {
     setIsSubmitting(false);
+    
+    // Re-enable form
+    if (submitButton) {
+      submitButton.disabled = false;
+      submitButton.innerHTML = '📦 Add Product to Store';
+    }
   }
 };
 
