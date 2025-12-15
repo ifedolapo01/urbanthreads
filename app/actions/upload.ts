@@ -1,12 +1,22 @@
-// app/actions/upload.ts - UPDATED WITH SERVICE ROLE
+// app/actions/upload.ts - SIMPLIFIED VERSION
 'use server';
 
-import { createAdminClient } from '@/lib/supabase/admin-server';
+import { createClient } from '@supabase/supabase-js';
 
 export async function uploadProductImage(formData: FormData) {
   try {
-    // Use admin client with service role (bypasses RLS)
-    const supabaseAdmin = createAdminClient();
+    // Use service role client
+    const supabaseAdmin = createClient(
+      process.env.NEXT_PUBLIC_SUPABASE_URL!,
+      process.env.SUPABASE_SERVICE_ROLE_KEY!,
+      {
+        auth: {
+          autoRefreshToken: false,
+          persistSession: false
+        }
+      }
+    );
+    
     const file = formData.get('image') as File;
     
     if (!file) {
@@ -30,7 +40,7 @@ export async function uploadProductImage(formData: FormData) {
       });
 
     if (uploadError) {
-      console.error('Admin upload error:', uploadError);
+      console.error('Upload error:', uploadError);
       return { error: `Upload failed: ${uploadError.message}` };
     }
 

@@ -1,10 +1,27 @@
-// app/api/admin/products/route.ts - UPDATED WITH SERVICE ROLE
+// app/api/admin/products/route.ts - FIXED VERSION
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
 export async function POST(request: NextRequest) {
   try {
-    // Use service role client (bypasses RLS)
+    // Log environment check
+    console.log('API Environment check:', {
+      hasUrl: !!process.env.NEXT_PUBLIC_SUPABASE_URL,
+      hasServiceKey: !!process.env.SUPABASE_SERVICE_ROLE_KEY
+    });
+
+    if (!process.env.SUPABASE_SERVICE_ROLE_KEY) {
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: 'Service role key not configured',
+          details: 'Add SUPABASE_SERVICE_ROLE_KEY to .env.local'
+        },
+        { status: 500 }
+      );
+    }
+
+    // Create admin client with service role
     const supabaseAdmin = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -36,14 +53,25 @@ export async function POST(request: NextRequest) {
         colors: body.colors || [],
         sizes: body.sizes || [],
         stock: body.stock || 0,
-        is_active: true
+        is_active: true,
+        created_at: new Date().toISOString(),
+        updated_at: new Date().toISOString()
       }])
       .select()
       .single();
 
     if (error) {
       console.error('Supabase insert error:', error);
-      throw error;
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: error.message,
+          code: error.code,
+          details: error.details,
+          hint: error.hint
+        },
+        { status: 500 }
+      );
     }
 
     return NextResponse.json({ 
@@ -56,8 +84,7 @@ export async function POST(request: NextRequest) {
     return NextResponse.json(
       { 
         success: false, 
-        error: error.message,
-        details: 'Check Supabase RLS policies for products table'
+        error: error.message || 'Unknown error'
       },
       { status: 500 }
     );
@@ -66,28 +93,28 @@ export async function POST(request: NextRequest) {
 
 export async function GET() {
   try {
-    // For GET, we can use regular client since we only need to read
-    const supabaseAdmin = createClient(
+    // Create regular client for reading (respects RLS)
+    const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
-      process.env.SUPABASE_SERVICE_ROLE_KEY!,
-      {
-        auth: {
-          autoRefreshToken: false,
-          persistSession: false
-        }
-      }
+      process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!
     );
     
-    const { data, error } = await supabaseAdmin
+    const { data, error } = await supabase
       .from('products')
       .select('*')
       .order('created_at', { ascending: false });
 
-    if (error) throw error;
+    if (error) {
+      console.error('Fetch error:', error);
+      return NextResponse.json(
+        { success: false, error: error.message },
+        { status: 500 }
+      );
+    }
 
     return NextResponse.json({ 
       success: true, 
-      products: data 
+      products: data || [] 
     });
   } catch (error: any) {
     return NextResponse.json(

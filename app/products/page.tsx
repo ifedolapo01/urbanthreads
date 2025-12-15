@@ -1,9 +1,10 @@
-// app/products/page.tsx - FIXED VERSION
+// app/products/page.tsx - UPDATED
 'use client';
 
 import { useState, useEffect } from 'react';
 import ProductCard from '@/components/ProductCard';
 import { Filter } from 'lucide-react';
+import { createClient } from '@/lib/supabase/client';
 
 interface Product {
   id: string;
@@ -29,21 +30,30 @@ export default function ProductsPage() {
   const loadProducts = async () => {
     setLoading(true);
     try {
-      const response = await fetch('/api/admin/products');
-      const data = await response.json();
+      // Use the Supabase client directly instead of API
+      const supabase = createClient();
       
-      if (data.success) {
-        // Filter by category if needed
-        let filtered = data.products;
-        if (selectedCategory !== 'all') {
-          filtered = filtered.filter((p: Product) => p.category === selectedCategory && p.is_active);
-        } else {
-          filtered = filtered.filter((p: Product) => p.is_active);
-        }
-        setProducts(filtered);
+      let query = supabase
+        .from('products')
+        .select('*')
+        .eq('is_active', true)
+        .order('created_at', { ascending: false });
+
+      if (selectedCategory !== 'all') {
+        query = query.eq('category', selectedCategory);
+      }
+
+      const { data, error } = await query;
+
+      if (error) {
+        console.error('Error loading products:', error);
+        setProducts([]);
+      } else {
+        setProducts(data || []);
       }
     } catch (error) {
       console.error('Error loading products:', error);
+      setProducts([]);
     } finally {
       setLoading(false);
     }
@@ -118,6 +128,9 @@ export default function ProductsPage() {
           ) : products.length === 0 ? (
             <div className="text-center py-16">
               <p className="text-gray-500 text-lg">No products found.</p>
+              <p className="text-gray-400 text-sm mt-2">
+                Add products from the admin panel first.
+              </p>
             </div>
           ) : (
             <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
