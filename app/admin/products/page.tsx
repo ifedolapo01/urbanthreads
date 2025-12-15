@@ -1,8 +1,8 @@
-// app/admin/products/page.tsx - FIXED CLIENT COMPONENT
+// app/admin/products/page.tsx - MINIMAL WORKING VERSION
 'use client';
 
-import { useState, useRef, useEffect } from 'react';
-import { Upload, X, CheckCircle } from 'lucide-react';
+import { useState, useRef } from 'react';
+import { Upload, X } from 'lucide-react';
 import { uploadProductImage } from '@/app/actions/upload';
 
 export default function AdminProducts() {
@@ -20,17 +20,7 @@ export default function AdminProducts() {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
-  const [successMessage, setSuccessMessage] = useState('');
-
-  // Clear success message after 5 seconds
-  useEffect(() => {
-    if (successMessage) {
-      const timer = setTimeout(() => {
-        setSuccessMessage('');
-      }, 5000);
-      return () => clearTimeout(timer);
-    }
-  }, [successMessage]);
+  const [success, setSuccess] = useState(false);
 
   const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -38,48 +28,37 @@ export default function AdminProducts() {
       setMainImage(file);
       setImagePreview(URL.createObjectURL(file));
       setError('');
-      setSuccessMessage(''); // Clear success when new image is selected
+      setSuccess(false);
     }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
-    setSuccessMessage('');
-
-    // Mobile: Disable form during submission
-    const form = e.target as HTMLFormElement;
-    const submitButton = form.querySelector('button[type="submit"]') as HTMLButtonElement;
     
-    if (submitButton) {
-      submitButton.disabled = true;
-      submitButton.innerHTML = '<span class="flex items-center justify-center"><svg class="animate-spin -ml-1 mr-3 h-5 w-5 text-white" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" strokeWidth="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg>Uploading...</span>';
+    // Quick validation
+    if (!formData.name.trim()) {
+      setError('Product name is required');
+      return;
+    }
+    
+    if (!mainImage) {
+      setError('Please select an image');
+      return;
     }
 
+    setIsSubmitting(true);
+    setError('');
+    setSuccess(false);
+
     try {
-      // 1. Upload image with mobile optimizations
-      if (!mainImage) {
-        throw new Error('Please select an image');
-      }
-
-      // Mobile: Check image size before upload
-      if (mainImage.size > 3 * 1024 * 1024) { // 3MB
-        throw new Error(`Image too large (${(mainImage.size / 1024 / 1024).toFixed(1)}MB). Max 3MB. Compress or use a smaller image.`);
-      }
-
-      console.log('Upload starting...');
-      
+      // 1. Upload image
       const uploadFormData = new FormData();
       uploadFormData.append('image', mainImage);
-      
       const uploadResult = await uploadProductImage(uploadFormData);
       
       if (uploadResult.error) {
         throw new Error(uploadResult.error);
       }
-
-      console.log('Upload successful, creating product...');
 
       // 2. Prepare product data
       const productData = {
@@ -94,88 +73,56 @@ export default function AdminProducts() {
         stock: formData.stock,
       };
 
-      // 3. Mobile-friendly fetch with timeout
-      const controller = new AbortController();
-      const timeoutId = setTimeout(() => controller.abort(), 60000); // 60 seconds
-      
-      try {
-        const response = await fetch('/api/admin/products', {
-          method: 'POST',
-          headers: { 
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify(productData),
-          signal: controller.signal
-        });
-        
-        clearTimeout(timeoutId);
-        
-        const result = await response.json();
-        
-        if (!result.success) {
-          // Mobile-friendly error messages
-          if (result.error.includes('timeout') || result.error.includes('network')) {
-            throw new Error('Connection issue. Please check your internet and try again.');
-          }
-          throw new Error(result.error || 'Failed to save product');
-        }
+      // 3. API call
+      const response = await fetch('/api/admin/products', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify(productData),
+      });
 
-        // Success! - Show success message instead of alert
-        setSuccessMessage('✅ Product added successfully!');
-        
-        // Reset form
-        setFormData({
-          name: '',
-          description: '',
-          price: 0,
-          category: 'men',
-          stock: 0,
-          colors: [''],
-          sizes: ['']
-        });
-        setMainImage(null);
-        setImagePreview('');
-        if (fileInputRef.current) {
-          fileInputRef.current.value = '';
-        }
-        
-      } catch (fetchError: any) {
-        // Handle abort/timeout
-        if (fetchError.name === 'AbortError') {
-          throw new Error('Request timeout. Try a smaller image or better connection.');
-        }
-        throw fetchError;
+      const result = await response.json();
+      
+      if (!result.success) {
+        throw new Error(result.error || 'Failed to save product');
       }
+
+      // 4. Success - set success flag
+      setSuccess(true);
+      
+      // 5. Reset form (but keep success state)
+      // Don't reset the form immediately - let user see success
       
     } catch (error: any) {
-      console.error('Submit error:', error);
-      
-      // Mobile-friendly error display
-      const errorMessage = error.message || 'Unknown error';
-      
-      if (errorMessage.includes('timeout') || errorMessage.includes('network')) {
-        setError(`📶 Connection issue: ${errorMessage}. Try with smaller images.`);
-      } else if (errorMessage.includes('large')) {
-        setError(`📸 ${errorMessage}. Use smaller images on mobile.`);
-      } else {
-        setError(`❌ ${errorMessage}`);
-      }
-      
+      console.error('Error:', error);
+      setError(error.message);
     } finally {
       setIsSubmitting(false);
-      
-      // Re-enable form
-      if (submitButton) {
-        submitButton.disabled = false;
-        submitButton.innerHTML = '📦 Add Product to Store';
-      }
     }
+  };
+
+  // Reset form function (called when user wants to add another product)
+  const resetForm = () => {
+    setFormData({
+      name: '',
+      description: '',
+      price: 0,
+      category: 'men',
+      stock: 0,
+      colors: [''],
+      sizes: [''],
+    });
+    setMainImage(null);
+    setImagePreview('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    setSuccess(false);
+    setError('');
   };
 
   // Add color input
   const addColorInput = () => {
     setFormData({...formData, colors: [...formData.colors, '']});
-    setError(''); // Clear errors when adding new color
   };
 
   const removeColorInput = (index: number) => {
@@ -192,7 +139,6 @@ export default function AdminProducts() {
   // Add size input
   const addSizeInput = () => {
     setFormData({...formData, sizes: [...formData.sizes, '']});
-    setError(''); // Clear errors when adding new size
   };
 
   const removeSizeInput = (index: number) => {
@@ -206,6 +152,37 @@ export default function AdminProducts() {
     setFormData({...formData, sizes: newSizes});
   };
 
+  // If success, show success screen
+  if (success) {
+    return (
+      <div className="p-6 max-w-2xl mx-auto">
+        <div className="bg-green-50 border border-green-200 rounded-xl p-8 text-center">
+          <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+            <svg className="w-8 h-8 text-green-600" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+              <path strokeLinecap="round" strokeLinejoin="round" strokeWidth="2" d="M5 13l4 4L19 7"></path>
+            </svg>
+          </div>
+          <h2 className="text-2xl font-bold text-gray-800 mb-3">Product Added Successfully!</h2>
+          <p className="text-gray-600 mb-8">Your product has been added to the store.</p>
+          <div className="space-y-4">
+            <button
+              onClick={resetForm}
+              className="w-full bg-blue-600 text-white py-3 rounded-lg font-semibold hover:bg-blue-700"
+            >
+              Add Another Product
+            </button>
+            <a
+              href="/admin/dashboard"
+              className="block w-full border border-gray-300 text-gray-700 py-3 rounded-lg font-semibold hover:bg-gray-50"
+            >
+              Go to Dashboard
+            </a>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
   return (
     <div className="p-6">
       <div className="mb-8">
@@ -213,17 +190,6 @@ export default function AdminProducts() {
         <p className="text-gray-600">Upload products to your store</p>
       </div>
       
-      {/* Success Message */}
-      {successMessage && (
-        <div className="mb-6 p-4 bg-green-50 border border-green-200 rounded-lg animate-fadeIn">
-          <div className="flex items-center">
-            <CheckCircle className="w-5 h-5 text-green-500 mr-3" />
-            <p className="text-green-800 font-medium">{successMessage}</p>
-          </div>
-        </div>
-      )}
-      
-      {/* Error Message */}
       {error && (
         <div className="mb-6 p-4 bg-red-50 border border-red-200 rounded-lg">
           <p className="text-red-600 font-medium">Error: {error}</p>
@@ -279,7 +245,6 @@ export default function AdminProducts() {
                   onClick={() => {
                     setMainImage(null);
                     setImagePreview('');
-                    setError('');
                   }}
                   className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
                   title="Remove image"
@@ -292,7 +257,7 @@ export default function AdminProducts() {
               <>
                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
                 <p className="text-gray-600 mb-1">Click to upload product image</p>
-                <p className="text-sm text-gray-500">PNG, JPG, GIF up to 3MB</p>
+                <p className="text-sm text-gray-500">PNG, JPG, GIF up to 5MB</p>
               </>
             )}
             <input
@@ -307,11 +272,11 @@ export default function AdminProducts() {
             />
             <label
               htmlFor="image-upload"
-              className={`mt-4 inline-block px-6 py-3 rounded-lg font-medium cursor-pointer transition-colors ${
+              className={`mt-4 inline-block px-6 py-3 rounded-lg font-medium ${
                 isSubmitting 
                   ? 'bg-gray-400 text-gray-700 cursor-not-allowed' 
-                  : 'bg-blue-600 text-white hover:bg-blue-700'
-              }`}
+                  : 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
+              } transition-colors`}
             >
               {mainImage ? 'Change Image' : 'Choose Image'}
             </label>
@@ -381,7 +346,7 @@ export default function AdminProducts() {
               type="button"
               onClick={addColorInput}
               className={`text-sm ${
-                isSubmitting ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'
+                isSubmitting ? 'text-gray-400' : 'text-blue-600 hover:text-blue-800'
               }`}
               disabled={isSubmitting}
             >
@@ -423,7 +388,7 @@ export default function AdminProducts() {
               type="button"
               onClick={addSizeInput}
               className={`text-sm ${
-                isSubmitting ? 'text-gray-400 cursor-not-allowed' : 'text-blue-600 hover:text-blue-800'
+                isSubmitting ? 'text-gray-400' : 'text-blue-600 hover:text-blue-800'
               }`}
               disabled={isSubmitting}
             >
@@ -459,7 +424,7 @@ export default function AdminProducts() {
         <button
           type="submit"
           disabled={isSubmitting}
-          className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors shadow-md hover:shadow-lg"
+          className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
         >
           {isSubmitting ? (
             <span className="flex items-center justify-center">
