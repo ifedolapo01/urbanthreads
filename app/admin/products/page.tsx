@@ -1,9 +1,31 @@
-// app/admin/products/page.tsx - MINIMAL WORKING VERSION
+// app/admin/products/page.tsx - WITH IMAGE COMPRESSION
 'use client';
 
 import { useState, useRef } from 'react';
 import { Upload, X } from 'lucide-react';
 import { uploadProductImage } from '@/app/actions/upload';
+import imageCompression from 'browser-image-compression';
+
+// Image compression function
+const compressImage = async (file: File): Promise<File> => {
+  const options = {
+    maxSizeMB: 1, // Compress to max 1MB
+    maxWidthOrHeight: 1920, // Resize if larger than 1920px
+    useWebWorker: true,
+    fileType: file.type,
+    initialQuality: 0.8, // 80% quality
+  };
+  
+  try {
+    console.log('Original file size:', (file.size / 1024 / 1024).toFixed(2), 'MB');
+    const compressedFile = await imageCompression(file, options);
+    console.log('Compressed file size:', (compressedFile.size / 1024 / 1024).toFixed(2), 'MB');
+    return compressedFile;
+  } catch (error) {
+    console.error('Compression error:', error);
+    return file; // Return original if compression fails
+  }
+};
 
 export default function AdminProducts() {
   const [formData, setFormData] = useState({
@@ -21,14 +43,56 @@ export default function AdminProducts() {
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [error, setError] = useState('');
   const [success, setSuccess] = useState(false);
+  const [isCompressing, setIsCompressing] = useState(false);
 
-  const handleImageChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+  // Updated handleImageChange with compression
+  const handleImageChange = async (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
     if (file) {
-      setMainImage(file);
-      setImagePreview(URL.createObjectURL(file));
+      setIsCompressing(true);
       setError('');
       setSuccess(false);
+      
+      try {
+        // Check file type
+        const allowedTypes = ['image/jpeg', 'image/jpg', 'image/png', 'image/webp', 'image/gif'];
+        if (!allowedTypes.includes(file.type)) {
+          setError(`Invalid file type: ${file.type}. Use JPEG, PNG, WebP, or GIF.`);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+          setIsCompressing(false);
+          return;
+        }
+        
+        // Check file size before compression
+        if (file.size > 10 * 1024 * 1024) { // 10MB
+          setError(`Image too large (${(file.size / 1024 / 1024).toFixed(2)}MB). Max 10MB before compression.`);
+          if (fileInputRef.current) {
+            fileInputRef.current.value = '';
+          }
+          setIsCompressing(false);
+          return;
+        }
+        
+        let processedFile = file;
+        
+        // Show compression message for large files
+        if (file.size > 1 * 1024 * 1024) { // 1MB
+          console.log('Compressing image...');
+          processedFile = await compressImage(file);
+        }
+        
+        setMainImage(processedFile);
+        setImagePreview(URL.createObjectURL(processedFile));
+        console.log('Image ready:', processedFile.name, `${(processedFile.size / 1024 / 1024).toFixed(2)}MB`);
+        
+      } catch (error: any) {
+        console.error('Image processing error:', error);
+        setError(`Failed to process image: ${error.message}`);
+      } finally {
+        setIsCompressing(false);
+      }
     }
   };
 
@@ -43,6 +107,11 @@ export default function AdminProducts() {
     
     if (!mainImage) {
       setError('Please select an image');
+      return;
+    }
+
+    if (isCompressing) {
+      setError('Please wait for image compression to complete');
       return;
     }
 
@@ -89,9 +158,6 @@ export default function AdminProducts() {
       // 4. Success - set success flag
       setSuccess(true);
       
-      // 5. Reset form (but keep success state)
-      // Don't reset the form immediately - let user see success
-      
     } catch (error: any) {
       console.error('Error:', error);
       setError(error.message);
@@ -100,7 +166,7 @@ export default function AdminProducts() {
     }
   };
 
-  // Reset form function (called when user wants to add another product)
+  // Reset form function
   const resetForm = () => {
     setFormData({
       name: '',
@@ -209,7 +275,7 @@ export default function AdminProducts() {
             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             placeholder="e.g., Essential Cotton Tee"
             required
-            disabled={isSubmitting}
+            disabled={isSubmitting || isCompressing}
           />
         </div>
 
@@ -223,7 +289,7 @@ export default function AdminProducts() {
             onChange={(e) => setFormData({...formData, description: e.target.value})}
             className="w-full border border-gray-300 rounded-lg px-4 py-3 h-32 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             placeholder="Describe your product..."
-            disabled={isSubmitting}
+            disabled={isSubmitting || isCompressing}
           />
         </div>
 
@@ -240,6 +306,14 @@ export default function AdminProducts() {
                   alt="Preview"
                   className="mx-auto max-h-64 rounded-lg object-contain"
                 />
+                {isCompressing && (
+                  <div className="absolute inset-0 bg-black bg-opacity-50 flex items-center justify-center rounded-lg">
+                    <div className="text-white text-center">
+                      <div className="animate-spin rounded-full h-8 w-8 border-t-2 border-white mx-auto mb-2"></div>
+                      <p className="text-sm">Compressing...</p>
+                    </div>
+                  </div>
+                )}
                 <button
                   type="button"
                   onClick={() => {
@@ -248,7 +322,7 @@ export default function AdminProducts() {
                   }}
                   className="absolute top-2 right-2 bg-red-500 text-white p-2 rounded-full hover:bg-red-600"
                   title="Remove image"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isCompressing}
                 >
                   <X size={16} />
                 </button>
@@ -257,7 +331,7 @@ export default function AdminProducts() {
               <>
                 <Upload className="mx-auto h-12 w-12 text-gray-400 mb-3" />
                 <p className="text-gray-600 mb-1">Click to upload product image</p>
-                <p className="text-sm text-gray-500">PNG, JPG, GIF up to 5MB</p>
+                <p className="text-sm text-gray-500">PNG, JPG, GIF up to 10MB (auto-compressed to 1MB)</p>
               </>
             )}
             <input
@@ -268,18 +342,24 @@ export default function AdminProducts() {
               className="hidden"
               id="image-upload"
               required
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCompressing}
             />
             <label
               htmlFor="image-upload"
               className={`mt-4 inline-block px-6 py-3 rounded-lg font-medium ${
-                isSubmitting 
+                isSubmitting || isCompressing
                   ? 'bg-gray-400 text-gray-700 cursor-not-allowed' 
                   : 'bg-blue-600 text-white hover:bg-blue-700 cursor-pointer'
               } transition-colors`}
             >
-              {mainImage ? 'Change Image' : 'Choose Image'}
+              {isCompressing ? 'Processing Image...' : mainImage ? 'Change Image' : 'Choose Image'}
             </label>
+            {mainImage && (
+              <p className="text-xs text-gray-500 mt-2">
+                Size: {(mainImage.size / 1024 / 1024).toFixed(2)}MB
+                {mainImage.size > 1 * 1024 * 1024 && ' (compressed)'}
+              </p>
+            )}
           </div>
         </div>
 
@@ -298,7 +378,7 @@ export default function AdminProducts() {
               step="100"
               placeholder="8500"
               required
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCompressing}
             />
           </div>
           <div>
@@ -313,7 +393,7 @@ export default function AdminProducts() {
               min="0"
               placeholder="50"
               required
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCompressing}
             />
           </div>
         </div>
@@ -328,7 +408,7 @@ export default function AdminProducts() {
             onChange={(e) => setFormData({...formData, category: e.target.value})}
             className="w-full border border-gray-300 rounded-lg px-4 py-3 focus:ring-2 focus:ring-blue-500 focus:border-blue-500 text-black"
             required
-            disabled={isSubmitting}
+            disabled={isSubmitting || isCompressing}
           >
             <option value="men">Men</option>
             <option value="women">Women</option>
@@ -346,9 +426,9 @@ export default function AdminProducts() {
               type="button"
               onClick={addColorInput}
               className={`text-sm ${
-                isSubmitting ? 'text-gray-400' : 'text-blue-600 hover:text-blue-800'
+                isSubmitting || isCompressing ? 'text-gray-400' : 'text-blue-600 hover:text-blue-800'
               }`}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCompressing}
             >
               + Add color
             </button>
@@ -362,14 +442,14 @@ export default function AdminProducts() {
                 className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-black"
                 placeholder="e.g., Black"
                 required={index === 0}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isCompressing}
               />
               {formData.colors.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeColorInput(index)}
                   className="px-4 text-red-600 hover:bg-red-50 rounded-lg disabled:text-gray-400"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isCompressing}
                 >
                   Remove
                 </button>
@@ -388,9 +468,9 @@ export default function AdminProducts() {
               type="button"
               onClick={addSizeInput}
               className={`text-sm ${
-                isSubmitting ? 'text-gray-400' : 'text-blue-600 hover:text-blue-800'
+                isSubmitting || isCompressing ? 'text-gray-400' : 'text-blue-600 hover:text-blue-800'
               }`}
-              disabled={isSubmitting}
+              disabled={isSubmitting || isCompressing}
             >
               + Add size
             </button>
@@ -404,14 +484,14 @@ export default function AdminProducts() {
                 className="flex-1 border border-gray-300 rounded-lg px-4 py-2 text-black"
                 placeholder="e.g., M"
                 required={index === 0}
-                disabled={isSubmitting}
+                disabled={isSubmitting || isCompressing}
               />
               {formData.sizes.length > 1 && (
                 <button
                   type="button"
                   onClick={() => removeSizeInput(index)}
                   className="px-4 text-red-600 hover:bg-red-50 rounded-lg disabled:text-gray-400"
-                  disabled={isSubmitting}
+                  disabled={isSubmitting || isCompressing}
                 >
                   Remove
                 </button>
@@ -423,7 +503,7 @@ export default function AdminProducts() {
         {/* Submit Button */}
         <button
           type="submit"
-          disabled={isSubmitting}
+          disabled={isSubmitting || isCompressing || !mainImage}
           className="w-full bg-blue-600 text-white py-4 rounded-lg font-semibold text-lg hover:bg-blue-700 disabled:bg-gray-400 disabled:cursor-not-allowed transition-colors"
         >
           {isSubmitting ? (
@@ -434,6 +514,10 @@ export default function AdminProducts() {
               </svg>
               Adding Product...
             </span>
+          ) : isCompressing ? (
+            'Processing Image...'
+          ) : !mainImage ? (
+            '📦 Select Image First'
           ) : (
             '📦 Add Product to Store'
           )}
