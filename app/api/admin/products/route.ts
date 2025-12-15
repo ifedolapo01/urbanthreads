@@ -1,21 +1,12 @@
-// app/api/admin/products/route.ts - WITH TIMEOUT HANDLING
+// app/api/admin/products/route.ts - WORKING VERSION
 import { NextRequest, NextResponse } from 'next/server';
 import { createClient } from '@supabase/supabase-js';
 
-// Set max duration for Vercel
-export const maxDuration = 10;
-
 export async function POST(request: NextRequest) {
-  console.log('=== PRODUCT API START ===');
-  
-  // Set a timeout promise
-  const timeoutPromise = new Promise((_, reject) => {
-    setTimeout(() => {
-      reject(new Error('Request timeout after 8 seconds'));
-    }, 8000);
-  });
+  console.log('🔄 PRODUCT API CALLED');
   
   try {
+    // Create client with service role
     const supabase = createClient(
       process.env.NEXT_PUBLIC_SUPABASE_URL!,
       process.env.SUPABASE_SERVICE_ROLE_KEY!,
@@ -23,18 +14,19 @@ export async function POST(request: NextRequest) {
         auth: {
           autoRefreshToken: false,
           persistSession: false
-        },
-        global: {
-          headers: {
-            'Content-Type': 'application/json'
-          }
         }
       }
     );
     
+    // Parse request
     const body = await request.json();
-    console.log('Body received, starting insert...');
+    console.log('📦 Product data:', { 
+      name: body.name, 
+      price: body.price,
+      category: body.category 
+    });
     
+    // Prepare product data
     const productData = {
       name: body.name,
       description: body.description || '',
@@ -50,62 +42,65 @@ export async function POST(request: NextRequest) {
       updated_at: new Date().toISOString()
     };
     
-    // Race between the insert and timeout
-    const insertPromise = supabase
+    console.log('🚀 Inserting product...');
+    
+    // Insert WITHOUT .select().single() first
+    const { error: insertError } = await supabase
       .from('products')
-      .insert([productData])
-      .select()
+      .insert([productData]);
+    
+    if (insertError) {
+      console.error('❌ Insert error:', insertError);
+      return NextResponse.json(
+        { 
+          success: false, 
+          error: insertError.message,
+          code: insertError.code,
+          hint: 'Check RLS policies - service_role should have full access'
+        },
+        { status: 500 }
+      );
+    }
+    
+    console.log('✅ Insert successful, fetching created product...');
+    
+    // Now fetch the product we just inserted
+    const { data: fetchedData, error: fetchError } = await supabase
+      .from('products')
+      .select('*')
+      .eq('name', body.name)
+      .order('created_at', { ascending: false })
+      .limit(1)
       .single();
     
-    const { data, error } = await Promise.race([insertPromise, timeoutPromise]) as any;
-    
-    if (error) {
-      console.error('Insert error:', error);
-      
-      // Try a simpler insert without the .select().single()
-      console.log('Trying simpler insert...');
-      const { error: simpleError } = await supabase
-        .from('products')
-        .insert([productData]);
-      
-      if (simpleError) {
-        return NextResponse.json({
-          success: false,
-          error: simpleError.message,
-          code: simpleError.code,
-          suggestion: 'The insert succeeded but selecting the record failed. Check if RLS allows SELECT after INSERT.'
-        }, { status: 500 });
-      }
-      
+    if (fetchError) {
+      console.warn('⚠️ Could not fetch product after insert:', fetchError);
+      // Still return success since insert worked
       return NextResponse.json({
         success: true,
-        message: 'Product inserted (but could not retrieve details)',
-        note: 'Insert succeeded but select failed. This is usually an RLS issue.'
+        product: productData, // Return what we tried to insert
+        message: 'Product created but could not retrieve details',
+        note: 'This is usually fine - the product was created successfully'
       });
     }
     
-    console.log('=== PRODUCT API SUCCESS ===');
+    console.log('🎉 Product fully processed:', fetchedData.id);
+    
     return NextResponse.json({
       success: true,
-      product: data
+      product: fetchedData,
+      message: 'Product created successfully'
     });
     
   } catch (error: any) {
-    console.error('=== PRODUCT API ERROR ===', error);
-    
-    if (error.message.includes('timeout')) {
-      return NextResponse.json({
-        success: false,
-        error: 'Request timeout',
-        details: 'The request took too long. This could be a network issue between Vercel and Supabase.',
-        suggestion: '1. Check Supabase region 2. Try smaller image 3. Check network connectivity'
-      }, { status: 504 });
-    }
-    
-    return NextResponse.json({
-      success: false,
-      error: error.message,
-      type: 'Unexpected Error'
-    }, { status: 500 });
+    console.error('💥 Unexpected error:', error);
+    return NextResponse.json(
+      { 
+        success: false, 
+        error: 'Internal server error',
+        details: error.message
+      },
+      { status: 500 }
+    );
   }
 }

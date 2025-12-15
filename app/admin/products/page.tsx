@@ -30,82 +30,80 @@ export default function AdminProducts() {
     }
   };
 
-  const handleSubmit = async (e: React.FormEvent) => {
-    e.preventDefault();
-    setIsSubmitting(true);
-    setError('');
+  // In app/admin/products/page.tsx - Update handleSubmit
+const handleSubmit = async (e: React.FormEvent) => {
+  e.preventDefault();
+  setIsSubmitting(true);
+  setError('');
 
-    try {
-      // Validate required fields
-      if (!formData.name || formData.price <= 0) {
-        throw new Error('Please fill in all required fields');
-      }
-
-      if (!mainImage) {
-        throw new Error('Please upload a product image');
-      }
-
-      // 1. Upload the main image
-      const uploadFormData = new FormData();
-      uploadFormData.append('image', mainImage);
-      const uploadResult = await uploadProductImage(uploadFormData);
-      
-      if (uploadResult.error) {
-        throw new Error(uploadResult.error);
-      }
-
-      // 2. Prepare product data
-      const productData = {
-        name: formData.name,
-        description: formData.description,
-        price: formData.price,
-        category: formData.category,
-        main_image: uploadResult.url!,
-        images: [],
-        colors: formData.colors.filter(c => c.trim() !== ''),
-        sizes: formData.sizes.filter(s => s.trim() !== ''),
-        stock: formData.stock,
-      };
-
-      // 3. Save to database via API route
-      const response = await fetch('/api/admin/products', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(productData),
-      });
-
-      const result = await response.json();
-      
-      if (!result.success) {
-        throw new Error(result.error || 'Failed to save product');
-      }
-
-      // 4. Success - reset form
-      alert('✅ Product added successfully!');
-      
-      // Reset everything
-      setFormData({
-        name: '',
-        description: '',
-        price: 0,
-        category: 'men',
-        stock: 0,
-        colors: [''],
-        sizes: [''],
-      });
-      setMainImage(null);
-      setImagePreview('');
-      if (fileInputRef.current) {
-        fileInputRef.current.value = '';
-      }
-      
-    } catch (error: any) {
-      console.error('Error:', error);
-      setError(error.message);
-    } finally {
-      setIsSubmitting(false);
+  try {
+    // 1. Upload image
+    const uploadFormData = new FormData();
+    uploadFormData.append('image', mainImage!);
+    const uploadResult = await uploadProductImage(uploadFormData);
+    
+    if (uploadResult.error) {
+      throw new Error(`Image upload failed: ${uploadResult.error}`);
     }
-  };
+
+    // 2. Prepare product data
+    const productData = {
+      name: formData.name,
+      description: formData.description,
+      price: formData.price,
+      category: formData.category,
+      main_image: uploadResult.url!,
+      images: [],
+      colors: formData.colors.filter(c => c.trim() !== ''),
+      sizes: formData.sizes.filter(s => s.trim() !== ''),
+      stock: formData.stock,
+    };
+
+    console.log('Sending product data:', productData);
+
+    // 3. Send to API
+    const response = await fetch('/api/admin/products', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(productData),
+    });
+
+    const result = await response.json();
+    
+    if (!result.success) {
+      // Check for specific error
+      if (result.code === '42501') {
+        throw new Error('Permission denied. The service role cannot insert products. Run the SQL fix.');
+      }
+      throw new Error(result.error || 'Failed to save product');
+    }
+
+    // 4. Success!
+    alert(`✅ ${result.message || 'Product added successfully!'}`);
+    
+    // 5. Reset form
+    setFormData({
+      name: '',
+      description: '',
+      price: 0,
+      category: 'men',
+      stock: 0,
+      colors: [''],
+      sizes: ['']
+    });
+    setMainImage(null);
+    setImagePreview('');
+    if (fileInputRef.current) {
+      fileInputRef.current.value = '';
+    }
+    
+  } catch (error: any) {
+    console.error('Submit error:', error);
+    setError(`Error: ${error.message}`);
+  } finally {
+    setIsSubmitting(false);
+  }
+};
 
   // Add color input
   const addColorInput = () => {
