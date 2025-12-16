@@ -1,0 +1,74 @@
+// app/api/admin/dashboard/route.ts
+import { NextResponse } from 'next/server';
+import { createAdminClient } from '@/lib/supabase/admin-server';
+
+export async function GET() {
+  try {
+    const supabase = createAdminClient();
+    
+    // Fetch total products count
+    const { count: totalProducts } = await supabase
+      .from('products')
+      .select('*', { count: 'exact', head: true })
+      .eq('is_active', true);
+    
+    // Fetch total orders count
+    const { count: totalOrders } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true });
+    
+    // Fetch pending orders count
+    const { count: pendingOrders } = await supabase
+      .from('orders')
+      .select('*', { count: 'exact', head: true })
+      .eq('status', 'pending');
+    
+    // Fetch total revenue from completed/delivered orders
+    const { data: revenueOrders } = await supabase
+      .from('orders')
+      .select('total_amount, status')
+      .in('status', ['confirmed', 'shipped', 'delivered']);
+    
+    const totalRevenue = revenueOrders?.reduce((sum, order) => sum + order.total_amount, 0) || 0;
+    
+    // Fetch recent orders (last 5)
+    const { data: recentOrders } = await supabase
+      .from('orders')
+      .select('*')
+      .order('created_at', { ascending: false })
+      .limit(5);
+    
+    // Fetch low stock products (stock <= 10)
+    const { data: lowStockProducts } = await supabase
+      .from('products')
+      .select('*')
+      .eq('is_active', true)
+      .lte('stock', 10)
+      .order('stock', { ascending: true })
+      .limit(5);
+
+    return NextResponse.json({
+      totalProducts: totalProducts || 0,
+      totalOrders: totalOrders || 0,
+      pendingOrders: pendingOrders || 0,
+      totalRevenue,
+      recentOrders: recentOrders || [],
+      lowStockProducts: lowStockProducts || []
+    });
+    
+  } catch (error) {
+    console.error('Error fetching dashboard stats:', error);
+    return NextResponse.json(
+      { 
+        error: 'Failed to fetch dashboard statistics',
+        totalProducts: 0,
+        totalOrders: 0,
+        pendingOrders: 0,
+        totalRevenue: 0,
+        recentOrders: [],
+        lowStockProducts: []
+      },
+      { status: 500 }
+    );
+  }
+}
